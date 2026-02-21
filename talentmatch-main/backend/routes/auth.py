@@ -3,9 +3,21 @@ from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identi
 import requests
 from urllib.parse import urlencode
 import os
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 auth_bp = Blueprint('auth', __name__)
+
+def api_response(data=None, success=True, message=None, status_code=200):
+    """Helper function to format API responses"""
+    response = {
+        'success': success,
+        'timestamp': datetime.utcnow().isoformat(),
+    }
+    if data is not None:
+        response['data'] = data
+    if message:
+        response['message'] = message
+    return jsonify(response), status_code
 
 # Mock user database for demo
 MOCK_USERS = {
@@ -47,7 +59,7 @@ def login():
     user = MOCK_USERS.get(email)
     
     if not user:
-        return jsonify({'error': 'Invalid credentials'}), 401
+        return api_response(success=False, message='Invalid credentials', status_code=401)
     
     # Create JWT token
     access_token = create_access_token(
@@ -61,16 +73,19 @@ def login():
         expires_delta=timedelta(hours=24)
     )
     
-    return jsonify({
-        'access_token': access_token,
-        'user': {
-            'id': user['id'],
-            'email': email,
-            'name': user['name'],
-            'role': user['role'],
-            'permissions': user['permissions']
-        }
-    })
+    return api_response(
+        data={
+            'access_token': access_token,
+            'user': {
+                'id': user['id'],
+                'email': email,
+                'name': user['name'],
+                'role': user['role'],
+                'permissions': user['permissions']
+            }
+        },
+        message='Login successful'
+    )
 
 @auth_bp.route('/api/auth/google')
 def google_login():
