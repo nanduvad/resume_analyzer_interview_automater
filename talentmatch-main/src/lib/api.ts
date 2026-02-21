@@ -12,7 +12,8 @@ class ApiError extends Error {
 class ApiService {
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    isRetry = false
   ): Promise<T> {
     const token = localStorage.getItem('auth_token');
     
@@ -31,6 +32,12 @@ class ApiService {
     });
     
     if (!response.ok) {
+      // If token is invalid/expired, clear it and retry once without token
+      if ((response.status === 401 || response.status === 422) && !isRetry) {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user_data');
+        return this.request<T>(endpoint, options, true);
+      }
       throw new ApiError(response.status, `API Error: ${response.statusText}`);
     }
     

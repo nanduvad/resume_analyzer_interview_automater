@@ -76,32 +76,35 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const login = async (email: string, password: string) => {
-    // For demo purposes - in production, call your backend
     setIsLoading(true);
     try {
-      // Mock API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Determine role from email for demo
-      let role: UserRole = UserRole.CANDIDATE;
-      if (email.includes('admin')) role = UserRole.ADMIN;
-      else if (email.includes('recruiter')) role = UserRole.RECRUITER;
-      else if (email.includes('hiring')) role = UserRole.HIRING_MANAGER;
-      else if (email.includes('interviewer')) role = UserRole.INTERVIEWER;
-      
+      // Call real backend API for authentication
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Invalid credentials');
+      }
+
+      const result = await response.json();
+      const { access_token, user: backendUser } = result.data || result;
+
       const userSession: UserSession = {
-        id: `user_${Date.now()}`,
-        email,
-        name: email.split('@')[0],
-        role,
-        permissions: getPermissionsForRole(role),
-        accessToken: 'mock_jwt_token'
+        id: backendUser.id,
+        email: backendUser.email,
+        name: backendUser.name,
+        role: backendUser.role as UserRole,
+        permissions: getPermissionsForRole(backendUser.role as UserRole),
+        accessToken: access_token,
       };
-      
+
       setUser(userSession);
-      localStorage.setItem('auth_token', 'mock_jwt_token');
+      localStorage.setItem('auth_token', access_token);
       localStorage.setItem('user_data', JSON.stringify(userSession));
-      
+
     } catch (error) {
       console.error('Login failed:', error);
       throw error;

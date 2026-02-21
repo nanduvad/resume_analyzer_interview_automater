@@ -1,8 +1,9 @@
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, jsonify
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 import os
 from dotenv import load_dotenv
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -18,12 +19,32 @@ app.config['CORS_HEADERS'] = 'Content-Type'
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 jwt = JWTManager(app)
 
+def error_response(message, status_code):
+    return jsonify({'success': False, 'message': message, 'timestamp': datetime.utcnow().isoformat()}), status_code
+
+# JWT error handlers - return clean JSON instead of 422/401 defaults
+@jwt.invalid_token_loader
+def invalid_token_callback(error_string):
+    return error_response('Invalid token: ' + error_string, 401)
+
+@jwt.expired_token_loader
+def expired_token_callback(jwt_header, jwt_data):
+    return error_response('Token has expired', 401)
+
+@jwt.unauthorized_loader
+def missing_token_callback(error_string):
+    return error_response('Authorization required: ' + error_string, 401)
+
+@jwt.revoked_token_loader
+def revoked_token_callback(jwt_header, jwt_data):
+    return error_response('Token has been revoked', 401)
+
 # Import and register blueprints
 try:
     from backend.routes.auth import auth_bp
     from backend.routes.api import api_bp
     app.register_blueprint(auth_bp)
-    app.register_blueprint(api_bp)
+    app.register_blueprint(api_bp, url_prefix='/api')
     print("✅ Auth and API routes registered")
 except ImportError as e:
     print(f"⚠️  Could not import some routes: {e}")

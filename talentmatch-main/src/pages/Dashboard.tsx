@@ -10,6 +10,7 @@ import { api } from '../lib/api';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
+  const [activeView, setActiveView] = useState<'overview' | 'candidates' | 'jobs' | 'analytics'>('overview');
   const [stats, setStats] = useState({
     totalJobs: 0,
     totalCandidates: 0,
@@ -41,7 +42,7 @@ const Dashboard: React.FC = () => {
     <div className="min-h-screen bg-gray-50">
       <Header />
       <div className="flex">
-        <Sidebar />
+        <Sidebar activeView={activeView} onViewChange={setActiveView} />
         
         <main className="flex-1 p-6">
           <div className="max-w-7xl mx-auto">
