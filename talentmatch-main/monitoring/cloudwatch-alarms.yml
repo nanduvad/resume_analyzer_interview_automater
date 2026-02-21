@@ -1,0 +1,52 @@
+# CloudWatch Alarms for Production
+alarms:
+  - name: HighCPUUtilization
+    namespace: AWS/ECS
+    metric: CPUUtilization
+    threshold: 80
+    period: 300
+    evaluationPeriods: 2
+    comparisonOperator: GreaterThanThreshold
+    statistic: Average
+    dimensions:
+      - name: ClusterName
+        value: talentmatch-cluster
+      - name: ServiceName
+        value: talentmatch-backend
+  
+  - name: HighMemoryUtilization
+    namespace: AWS/ECS
+    metric: MemoryUtilization
+    threshold: 85
+    period: 300
+    evaluationPeriods: 2
+    comparisonOperator: GreaterThanThreshold
+    statistic: Average
+  
+  - name: HighResponseTime
+    namespace: AWS/ApplicationELB
+    metric: TargetResponseTime
+    threshold: 2.0
+    period: 300
+    evaluationPeriods: 2
+    comparisonOperator: GreaterThanThreshold
+    statistic: p95
+  
+  - name: HTTP5xxErrors
+    namespace: AWS/ApplicationELB
+    metric: HTTPCode_Target_5XX_Count
+    threshold: 10
+    period: 60
+    evaluationPeriods: 1
+    comparisonOperator: GreaterThanThreshold
+    statistic: Sum
+
+actions:
+  alarm:
+    - sns:
+        topicArn: arn:aws:sns:us-east-1:123456789012:production-alerts
+    - autoscaling:
+        policyName: scale-out-policy
+        adjustmentType: ChangeInCapacity
+        scalingAdjustment: 1
+        cooldown: 300

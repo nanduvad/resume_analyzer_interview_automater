@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_DB: talentmatch_production
+      POSTGRES_USER: talentmatch
+      POSTGRES_PASSWORD: production_password_123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass redis_password_123
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "5000:5000"
+    environment:
+      DATABASE_URL: postgresql://talentmatch:production_password_123@postgres:5432/talentmatch_production
+      REDIS_URL: redis://default:redis_password_123@redis:6379
+      JWT_SECRET_KEY: production_jwt_secret_key
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-mock_id}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-mock_secret}
+      GOOGLE_REDIRECT_URI: http://localhost:5000/api/auth/google/callback
+    depends_on:
+      - postgres
+      - redis
+
+  # Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  redis_data:

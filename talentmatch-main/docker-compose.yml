@@ -1,0 +1,32 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "5000:5000"
+    environment:
+      FLASK_ENV: production
+      DATABASE_URL: sqlite:///talentmatch.db
+      JWT_SECRET_KEY: dev-secret-key
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-mock}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-mock}
+      GOOGLE_REDIRECT_URI: http://localhost:5000/api/auth/google/callback
+    volumes:
+      - ./backend:/app
+      - ./config:/app/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend.working.working
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy

@@ -1,0 +1,161 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'TalentMatch Production Infrastructure'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: production
+    Description: 'Deployment environment'
+  
+  DomainName:
+    Type: String
+    Default: talentmatch.com
+    Description: 'Your domain name'
+
+Resources:
+  # VPC with public and private subnets
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-vpc'
+
+  # Internet Gateway
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+
+  VPCGatewayAttachment:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Subnets
+  PublicSubnet1:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.1.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-public-subnet-1'
+
+  # Security Groups
+  LoadBalancerSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Load Balancer Security Group'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+
+  # RDS Database (PostgreSQL)
+  DBInstance:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      DBInstanceIdentifier: !Sub '${EnvironmentName}-database'
+      DBName: talentmatch
+      Engine: postgres
+      EngineVersion: '14.7'
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: '20'
+      StorageEncrypted: true
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      VPCSecurityGroups:
+        - !Ref DBSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      BackupRetentionPeriod: 7
+      MultiAZ: true
+      PubliclyAccessible: false
+
+  # Elasticache Redis
+  RedisCache:
+    Type: 'AWS::ElastiCache::CacheCluster'
+    Properties:
+      CacheNodeType: cache.t3.micro
+      Engine: redis
+      NumCacheNodes: 1
+      VpcSecurityGroupIds:
+        - !Ref RedisSecurityGroup
+      CacheSubnetGroupName: !Ref CacheSubnetGroup
+
+  # ECS Cluster for Backend
+  ECSCluster:
+    Type: 'AWS::ECS::Cluster'
+    Properties:
+      ClusterName: !Sub '${EnvironmentName}-cluster'
+
+  # Load Balancer
+  LoadBalancer:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Name: !Sub '${EnvironmentName}-alb'
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+
+  # CloudFront Distribution for Frontend
+  CloudFrontDistribution:
+    Type: 'AWS::CloudFront::Distribution'
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Origins:
+          - DomainName: !GetAtt LoadBalancer.DNSName
+            Id: APIOrigin
+            CustomOriginConfig:
+              HTTPPort: 80
+              HTTPSPort: 443
+              OriginProtocolPolicy: https-only
+        DefaultCacheBehavior:
+          TargetOriginId: APIOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+            - PUT
+            - PATCH
+            - POST
+            - DELETE
+          CachedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          DefaultTTL: 0
+          MaxTTL: 0
+          MinTTL: 0
+          ForwardedValues:
+            QueryString: true
+            Cookies:
+              Forward: all
+
+Outputs:
+  DatabaseEndpoint:
+    Description: 'RDS Endpoint'
+    Value: !GetAtt DBInstance.Endpoint.Address
+  
+  LoadBalancerDNS:
+    Description: 'Load Balancer DNS Name'
+    Value: !GetAtt LoadBalancer.DNSName
+  
+  CloudFrontURL:
+    Description: 'CloudFront Distribution URL'
+    Value: !GetAtt CloudFrontDistribution.DomainName
